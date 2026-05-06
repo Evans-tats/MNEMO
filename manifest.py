@@ -70,5 +70,18 @@ class ManifestDiff:
 class Manifest:
     """Read/Write the _manifest.json for a raw/ directory."""
 
-    def __init__(self, rawd_Dir: Path) -> None:
-        pass
+    def __init__(self, raw_Dir: Path) -> None:
+        self._raw_dir = raw_Dir.resolve()
+        self.path = self._raw_dir / "_manifest.json"
+        self.entries: dict[str,ManifestEntry] = {}
+        self._load()
+
+    def scan(self) -> ManifestDiff:
+        for path in (self._raw_dir.rglob("*")):
+            if not path.is_file():
+                continue
+            if path.name in _IGNORED_NAMES:
+                continue
+            if path.suffix in _IGNORED_SUFFIXES:
+                continue
+            rel = 
