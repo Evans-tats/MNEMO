@@ -2,11 +2,14 @@
 Schema : make json file """
 
 import hashlib
+import logging
 from pathlib import Path
 from datetime import datetime,timezone
 from typing import Optional,Any
 from dataclasses import dataclass,asdict, field
 
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
 
 _MANIFEST_VERSION = 1
 _IGNORED_NAMES = frozenset({"_manifest.json", ".DS_Store", "Thumbs.db"})
@@ -72,11 +75,12 @@ class Manifest:
 
     def __init__(self, raw_Dir: Path) -> None:
         self._raw_dir = raw_Dir.resolve()
-        self.path = self._raw_dir / "_manifest.json"
-        self.entries: dict[str,ManifestEntry] = {}
+        self._path = self._raw_dir / "_manifest.json"
+        self._entries: dict[str,ManifestEntry] = {}
         self._load()
 
     def scan(self) -> ManifestDiff:
+        on_disk : dict[str,ManifestEntry] ={}
         for path in (self._raw_dir.rglob("*")):
             if not path.is_file():
                 continue
@@ -84,4 +88,70 @@ class Manifest:
                 continue
             if path.suffix in _IGNORED_SUFFIXES:
                 continue
-            rel = 
+            rel = str(path.relative_to(self._raw_dir))
+            try:
+                h= _sha256(path)
+            except OSError as exc:
+                log.warning("cannot hash %s: %s", path, exc)
+                continue
+            existing = self._entries.get(rel)
+            is_unchanged = existing and existing.hash == h
+
+            on_disk[rel] = ManifestEntry(
+                hash=h,
+                source_url=existing.source_url if is_unchanged else "",
+                ingest_ts=existing.ingest_ts if is_unchanged else datetime.now(timezone.utc).isoformat(),
+                type=_classify(path),
+                size_bytes=path.stat().st_size,
+            )
+            perv_keys = set(self.entries)
+            curr_keys = set(on_disk)
+
+            new =sorted(curr_keys - perv_keys)
+            deleted = sorted(perv_keys - curr_keys)
+            modified = sorted(
+                k for k in (curr_keys & perv_keys)
+                if on_disk[k].hash != self._entries[k].hash
+            )
+            self._entries = on_disk
+            return ManifestDiff(
+                new=[Path(p) for p in new],
+                modified=[Path(p) for p in modified],
+                deleted=[Path(p) for p in deleted],
+            )
+        
+    def update_url(self, rel_path: Path | str, url:str) -> None:
+        """Update the source URL for a given file."""
+        key = str(rel_path)
+        if key in self._entries:
+            self._entries[key].source_url = url
+        else:
+            log.warning("Cannot update URL for %s: not found in manifest", rel_path)
+    
+    def get(self, rel_path: Path | str) -> Optional[ManifestEntry]:
+        """Get the manifest entry for a given file."""
+        return self._entries.get(str(rel_path))
+    
+    def all_entries(self) -> dict[str, ManifestEntry]:
+        """Return all manifest entries."""
+        return self._entries
+    
+    def save(self) -> None:
+        """Write the manifest to disk."""
+        payload = {
+            "version": _MANIFEST_VERSION,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "entries": {k: v.to_dict() for k, v in self._entries.items()},
+        }
+        tmp = self._path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False),encoding="utf-8")
+        tmp.replace(self._path)
+        log.debug("Manifest saved with %d entries", len(self._entries))
+
+    def stats(self) -> dict[str,int]:
+        counts : dict[str,int] = {}
+        for entry in self._entries.values():
+            counts[entry.type] = counts.get(entry.type, 0) + 1
+        return counts
+    
+    
