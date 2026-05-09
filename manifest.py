@@ -2,6 +2,7 @@
 Schema : make json file """
 
 import hashlib
+import json
 import logging
 from pathlib import Path
 from datetime import datetime,timezone
@@ -41,8 +42,8 @@ def _sha256(path : Path, chunk: int = 1 << 20) -> str:
 class ManifestEntry:
     hash: str
     source_url: str = ""
-    ingest_ts: str = field(default_factory=lambda: datetime.now(timezone.utc)isoformat())
-    type : str = ""
+    ingest_ts: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    type : str = "unknown"
     size_bytes: int = 0
 
     def to_dict(self) -> dict[str, Any]:
@@ -154,4 +155,17 @@ class Manifest:
             counts[entry.type] = counts.get(entry.type, 0) + 1
         return counts
     
-    
+    def _load(self) -> None:
+        if not self._path.is_file():
+            log.info("No manifest found at %s, starting fresh.", self._path)
+            return
+        try:
+            data = json.loads(self._path.read_text(encoding="utf-8"))
+            if data.get("version") != _MANIFEST_VERSION:
+                log.warning("Manifest version mismatch: expected %d, got %s. Ignoring existing manifest.", _MANIFEST_VERSION, data.get("version"))
+                return
+            entries = data.get("entries", {})
+            self._entries = {k: ManifestEntry.from_dict(v) for k, v in entries.items()}
+            log.info("Loaded manifest with %d entries from %s", len(self._entries), self._path)
+        except (json.JSONDecodeError, OSError) as exc:
+            log.warning("Failed to load manifest from %s: %s. Starting fresh.", self._path, exc)
