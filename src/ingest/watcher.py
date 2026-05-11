@@ -51,7 +51,7 @@ class _Debouncer:
         except Exception as e: # noqa: BLE001
             log.error("Error in debounced callback: %s", e, exc_info=True)
     
-    def _make_watchdog_handler(debouncer: _Debouncer):
+    def _make_watchdog_handler(self, debouncer: _Debouncer):
         """Build a watchdog EventHandler that feeds the debouncer."""
         try: 
             from watchdog.events import FileSystemEventHandler
