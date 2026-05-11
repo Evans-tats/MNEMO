@@ -69,7 +69,20 @@ class ManifestDiff:
     def changed(self) -> list[Path]:
         return self.new + self.modified
     
-
+    @property
+    def has_changed(self) -> bool:
+        return bool(self.new or self.modified or self.deleted)
+    
+    @property
+    def summary(self) -> str:
+        parts = []
+        if self.new:
+            parts.append(f"{len(self.new)} new")
+        if self.modified:
+            parts.append(f"{len(self.modified)} modified")
+        if self.deleted:
+            parts.append(f"{len(self.deleted)} deleted")
+        return ", ".join(parts) if parts else "no changes"  
 
 class Manifest:
     """Read/Write the _manifest.json for a raw/ directory."""
@@ -141,7 +154,6 @@ class Manifest:
         """Write the manifest to disk."""
         payload = {
             "version": _MANIFEST_VERSION,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
             "entries": {k: v.to_dict() for k, v in self._entries.items()},
         }
         tmp = self._path.with_suffix(".tmp")

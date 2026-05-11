@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 
-from manifest import Manifest, ManifestEntry, _classify, _sha256
+from src.ingest.manifest import Manifest, ManifestEntry, _classify, _sha256
 
 
 @pytest.fixture
