@@ -33,7 +33,7 @@ class _Debouncer:
     def __init__(self, callback: Callable[[], None], delay: float):
         self.callback = callback
         self.delay = delay
-        self._timer = threading.Timer | None = None
+        self._timer : threading.Timer | None = None
         self._lock = threading.Lock()
 
     def trigger(self):

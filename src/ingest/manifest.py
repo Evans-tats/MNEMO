@@ -118,7 +118,7 @@ class Manifest:
                 type=_classify(path),
                 size_bytes=path.stat().st_size,
             )
-            perv_keys = set(self.entries)
+            perv_keys = set(self._entries)
             curr_keys = set(on_disk)
 
             new =sorted(curr_keys - perv_keys)
